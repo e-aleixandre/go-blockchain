@@ -69,3 +69,24 @@ func (w *Wallet) Address() []byte {
 
 	return address
 }
+
+func (w *Wallet) GobEncode() ([]byte, error) {
+	if w == nil {
+		log.Panic("PrivateKey is nil")
+	}
+
+	return w.PrivateKey.Bytes(), nil
+}
+
+func (w *Wallet) GobDecode(data []byte) error {
+	var err error
+	w.PrivateKey, err = ecdh.P256().NewPrivateKey(data)
+
+	if err != nil {
+		return err
+	}
+
+	w.PublicKey = w.PrivateKey.PublicKey().Bytes()
+
+	return nil
+}
