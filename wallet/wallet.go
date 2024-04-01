@@ -1,7 +1,9 @@
 package wallet
 
 import (
-	"crypto/ecdh"
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
@@ -15,20 +17,22 @@ const (
 )
 
 type Wallet struct {
-	PrivateKey *ecdh.PrivateKey
+	PrivateKey *ecdsa.PrivateKey
 	PublicKey  []byte
 }
 
-func NewKeyPair() (*ecdh.PrivateKey, []byte) {
-	curve := ecdh.P256()
+func NewKeyPair() (*ecdsa.PrivateKey, []byte) {
+	curve := elliptic.P256()
 
-	private, err := curve.GenerateKey(rand.Reader)
+	private, err := ecdsa.GenerateKey(curve, rand.Reader)
 
 	if err != nil {
 		log.Panic(err)
 	}
 
-	return private, private.PublicKey().Bytes()
+	publicKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+
+	return private, publicKey
 }
 
 func MakeWallet() *Wallet {
@@ -48,7 +52,7 @@ func PublicKeyHash(pubKey []byte) []byte {
 	return publicRipMD
 }
 
-func CheckSum(publicKeyHash []byte) []byte {
+func Checksum(publicKeyHash []byte) []byte {
 	hashed := sha256.Sum256(publicKeyHash)
 	hashed = sha256.Sum256(hashed[:])
 
@@ -58,7 +62,7 @@ func CheckSum(publicKeyHash []byte) []byte {
 func (w *Wallet) Address() []byte {
 	pubHash := PublicKeyHash(w.PublicKey)
 	versionedHash := append([]byte{version}, pubHash...)
-	checksum := CheckSum(versionedHash)
+	checksum := Checksum(versionedHash)
 
 	fullHash := append(versionedHash, checksum...)
 	address := Base58Encode(fullHash)
@@ -70,23 +74,12 @@ func (w *Wallet) Address() []byte {
 	return address
 }
 
-func (w *Wallet) GobEncode() ([]byte, error) {
-	if w == nil {
-		log.Panic("PrivateKey is nil")
-	}
+func ValidateAddress(address string) bool {
+	pubKeyHash := Base58Decode([]byte(address))
+	actualChecksum := pubKeyHash[len(pubKeyHash)-checksumLength:]
+	version := pubKeyHash[0]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-checksumLength]
+	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
 
-	return w.PrivateKey.Bytes(), nil
-}
-
-func (w *Wallet) GobDecode(data []byte) error {
-	var err error
-	w.PrivateKey, err = ecdh.P256().NewPrivateKey(data)
-
-	if err != nil {
-		return err
-	}
-
-	w.PublicKey = w.PrivateKey.PublicKey().Bytes()
-
-	return nil
+	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }
