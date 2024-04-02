@@ -50,7 +50,7 @@ func (ws *Wallets) AddWallet() string {
 func (ws *Wallets) SaveFile() {
 	var content bytes.Buffer
 
-	gob.Register(ecdh.P256())
+	gob.Register(ws)
 
 	encoder := gob.NewEncoder(&content)
 	err := encoder.Encode(ws)

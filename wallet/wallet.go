@@ -6,9 +6,11 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"golang.org/x/crypto/ripemd160"
 	"log"
+	"math/big"
 )
 
 const (
@@ -82,4 +84,36 @@ func ValidateAddress(address string) bool {
 	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
 
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
+}
+
+func (w *Wallet) GobEncode() ([]byte, error) {
+	dBytes := w.PrivateKey.D.Bytes()
+	dLength := len(dBytes)
+	encodedD := append([]byte{byte(dLength)}, dBytes...)
+	compressedBytes := elliptic.MarshalCompressed(w.PrivateKey.Curve, w.PrivateKey.X, w.PrivateKey.Y)
+
+	return append(encodedD, compressedBytes...), nil
+}
+
+func (w *Wallet) GobDecode(data []byte) error {
+	curve := elliptic.P256()
+	dLength := int(data[0])
+	dBytes := data[1 : 1+dLength]
+	D := new(big.Int)
+	D.SetBytes(dBytes)
+
+	x, y := elliptic.UnmarshalCompressed(curve, data[1+dLength:])
+
+	if x == nil {
+		return errors.New("invalid stored wallet data")
+	}
+
+	w.PrivateKey = new(ecdsa.PrivateKey)
+	w.PrivateKey.Curve = curve
+	w.PrivateKey.X = x
+	w.PrivateKey.Y = y
+	w.PrivateKey.D = D
+	w.PublicKey = append(x.Bytes(), y.Bytes()...)
+
+	return nil
 }
