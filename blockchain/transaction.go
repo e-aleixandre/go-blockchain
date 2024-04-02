@@ -41,7 +41,7 @@ func (tx *Transaction) Hash() []byte {
 	txCopy := *tx
 	txCopy.ID = []byte{}
 
-	sha256.Sum256(txCopy.Serialize())
+	hash = sha256.Sum256(txCopy.Serialize())
 
 	return hash[:]
 }
